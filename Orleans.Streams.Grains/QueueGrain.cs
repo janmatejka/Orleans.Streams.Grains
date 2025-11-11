@@ -35,22 +35,22 @@ public class QueueGrain(
     public Task DeleteQueueMessageAsync(GrainsQueueBatchContainer message)
     {
         var pending = persistentState.State.PendingMessages.Dequeue();
-        while (!pending.SequenceToken.Equals(pending.SequenceToken))
+        while (!pending.SequenceToken.Equals(message.SequenceToken))
         {
             switch (options.Value.DeadLetterStrategy)
             {
                 case DeadLetterStrategyType.Requeue:
-                    persistentState.State.Messages.Enqueue(pending);
+                    persistentState.State.Messages.Enqueue(message);
                     break;
                 case DeadLetterStrategyType.DeadLetterQueue:
-                    persistentState.State.DroppedMessages.Enqueue(pending);
+                    persistentState.State.DroppedMessages.Enqueue(message);
                     break;
                 case DeadLetterStrategyType.Log:
                 default:
                     logger.LogWarning(
-                        new QueueMessageDroppedException(pending.ToString()),
+                        new QueueMessageDroppedException(message.ToString()),
                         "Message with token {Token} was not found in the pending messages queue.",
-                        pending.SequenceToken);
+                        message.SequenceToken);
                     break;
             }
 
