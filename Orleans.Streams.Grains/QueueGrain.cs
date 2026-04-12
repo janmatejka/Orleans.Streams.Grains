@@ -34,7 +34,13 @@ public class QueueGrain(
 
     public Task<GrainsQueueReplayWindow> GetReplayWindowAsync(int maxCount)
     {
-        var messages = persistentState.State.ReplayMessages.Take(maxCount).ToList();
+        if (maxCount <= 0 || persistentState.State.ReplayMessages.Count == 0)
+        {
+            return Task.FromResult(new GrainsQueueReplayWindow());
+        }
+
+        var skip = Math.Max(persistentState.State.ReplayMessages.Count - maxCount, 0);
+        var messages = persistentState.State.ReplayMessages.Skip(skip).ToList();
         var warmupCutoffToken = messages.Count == 0 ? null : messages[^1].SequenceToken;
 
         return Task.FromResult(new GrainsQueueReplayWindow

@@ -224,4 +224,46 @@ public class QueueGrainTests
         Assert.Equal(1, status.DroppedMessagesCount);
         Assert.Equal(1, status.ReplayMessagesCount);
     }
+
+    [Fact]
+    public async Task GetReplayWindowAsync_ReturnsNewestBatchesWithinRequestedCount()
+    {
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var first = TestHelpers.NewBatch(1, "orders", "a");
+        var second = TestHelpers.NewBatch(2, "orders", "b");
+        var third = TestHelpers.NewBatch(3, "orders", "c");
+        var state = new QueueGrainState();
+        state.ReplayMessages.Enqueue(first);
+        state.ReplayMessages.Enqueue(second);
+        state.ReplayMessages.Enqueue(third);
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions { DeadLetterStrategy = DeadLetterStrategyType.Log });
+        var sut = new QueueGrain(persistent, logger, options);
+
+        var window = await sut.GetReplayWindowAsync(2);
+
+        Assert.Collection(
+            window.Messages,
+            message => Assert.Same(second, message),
+            message => Assert.Same(third, message));
+        Assert.Equal(third.SequenceToken.ToString(), window.WarmupCutoffToken!.ToString());
+    }
+
+    [Fact]
+    public async Task GetReplayWindowAsync_ReturnsEmptyWindow_WhenCountIsNotPositive()
+    {
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var state = new QueueGrainState();
+        state.ReplayMessages.Enqueue(TestHelpers.NewBatch(1, "orders", "a"));
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions { DeadLetterStrategy = DeadLetterStrategyType.Log });
+        var sut = new QueueGrain(persistent, logger, options);
+
+        var window = await sut.GetReplayWindowAsync(0);
+
+        Assert.Empty(window.Messages);
+        Assert.Null(window.WarmupCutoffToken);
+    }
 }
