@@ -18,3 +18,4 @@
 - [x] Krok 5: pridan `GrainsRewindableQueueAdapterCache` a `GrainsRewindableQueueCache` s retention windowem.
 - [x] Krok 6: doplnen warmup replay buffer do `GrainsQueueAdapterReceiver.Initialize` a live duplicate filtering.
 - [x] Krok 7: prepnuto `GrainsQueueAdapter.IsRewindable` na rewindable path.
+- [x] Krok 8: doplnen `ReplayMessagesCount` do `QueueStatus`, naplnen z `QueueGrain.GetStatusAsync` a dopsany test snapshotu/stavu.
