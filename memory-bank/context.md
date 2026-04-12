@@ -14,3 +14,4 @@
 - [x] Krok 1: doplnen `ReplayRetentionBatchCount` do `GrainsStreamOptions` a validaci v `GrainsStreamOptionsValidator`.
 - [x] Krok 2: pridan `ReplayMessages` buffer do `QueueGrainState`.
 - [x] Krok 3: pridano `GetReplayWindowAsync` API a DTO `GrainsQueueReplayWindow`.
+- [x] Krok 4: prepisan `QueueGrain.DeleteQueueMessageAsync` na prefix-finalizer s replay trimem a idempotenci.
