@@ -16,3 +16,4 @@
 - [x] Krok 3: pridano `GetReplayWindowAsync` API a DTO `GrainsQueueReplayWindow`.
 - [x] Krok 4: prepisan `QueueGrain.DeleteQueueMessageAsync` na prefix-finalizer s replay trimem a idempotenci.
 - [x] Krok 5: pridan `GrainsRewindableQueueAdapterCache` a `GrainsRewindableQueueCache` s retention windowem.
+- [x] Krok 6: doplnen warmup replay buffer do `GrainsQueueAdapterReceiver.Initialize` a live duplicate filtering.
