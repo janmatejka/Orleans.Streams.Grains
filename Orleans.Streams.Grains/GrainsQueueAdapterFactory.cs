@@ -26,10 +26,11 @@ public class GrainsQueueAdapterFactory : IQueueAdapterFactory
     {
         _providerName = name;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        _adapterCache = new GrainsRewindableQueueAdapterCache(
-            _providerName,
-            options.ReplayRetentionBatchCount,
-            _loggerFactory);
+        var effectiveCacheOptions = new SimpleQueueCacheOptions
+        {
+            CacheSize = Math.Max(cacheOptions.CacheSize, options.ReplayRetentionBatchCount)
+        };
+        _adapterCache = new SimpleQueueAdapterCache(effectiveCacheOptions, _providerName, _loggerFactory);
         _streamQueueMapper = new GrainsStreamQueueMapper(options);
         _grainsQueueService = new GrainsQueueService(
             _providerName,
