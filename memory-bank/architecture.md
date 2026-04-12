@@ -60,6 +60,13 @@ sequenceDiagram
   - [HostingApiTests](../Orleans.Streams.Grains.Tests/HostingApiTests.cs)
   - [PublicApiModelTests](../Orleans.Streams.Grains.Tests/PublicApiModelTests.cs)
   - [SmokeTests](../Orleans.Streams.Grains.Tests/SmokeTests.cs)
+  - [GrainsStreamIntegrationTests](../Orleans.Streams.Grains.Tests/GrainsStreamIntegrationTests.cs)
+
+## Klicove integracni scenare
+- Persist replay windowu a `QueueStatus` pres cluster lifecycle.
+- Zatezovy scenar pro ruzne kombinace writer/reader (`QueueService_ProcessesConcurrentWritersAndReaders`).
+- Deaktivace a reaktivace grainu bez ztraty replay/status dat (`QueueService_PersistsStateAcrossDeactivateAndReactivation`).
+- Primarni subscriber + handoff kurzoru na sekundarniho subscribera s overenim navazani od 6. zpravy (`StreamProvider_PrimaryAndSecondaryResumeFromSavedCursor`).
 
 ## Poznamka k implementaci hostingu
 - V konfiguratorech hostingu byly opraveny null guardy, aby validace argumentu probehla pred volanim bazoveho konstruktoru:

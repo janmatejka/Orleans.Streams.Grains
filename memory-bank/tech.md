@@ -35,10 +35,14 @@
 - `dotnet test Orleans.Streams.Grains.slnx -c Release`
 
 ## Stav verifikace (po implementaci testu)
-- Test project obsahuje aktivni test sadu s pokrytim API knihovny.
+- Test project obsahuje aktivni test sadu s pokrytim API knihovny i integrovaneho rewind behavioru.
 - Posledni overeni pres VS-MCP:
   - `ExecuteCommand(build)`: uspech, 0 chyb, 0 warningu
-  - `ExecuteAsyncTest(Orleans.Streams.Grains.Tests)`: 48/48 passed
+  - `ExecuteAsyncTest(Orleans.Streams.Grains.Tests)`: 71/71 passed
+- Overene provozni scenare:
+  - soubezni writer/reader kombinace pro ruzne pocty producentu a konzumentu,
+  - deaktivace/reaktivace queue grainu se zachovanim replay windowu,
+  - handoff kurzoru mezi primarnim a sekundarnim subscriberem.
 - Dulezita oprava v produkcnim kodu:
   - `ThrowIfNull` helper v hosting konfiguratorech pro korektni `ArgumentNullException` pri neplatnych vstupech.
 
