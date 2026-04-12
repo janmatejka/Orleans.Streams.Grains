@@ -22,6 +22,12 @@ public class GrainsStreamOptionsValidator : IConfigurationValidator
                 $"{nameof(GrainsStreamOptions)}.{nameof(GrainsStreamOptions.MaxStreamNamespaceQueueCount)} on stream provider {_name} is invalid. {nameof(GrainsStreamOptions.MaxStreamNamespaceQueueCount)} must be greater than 0");
         }
 
+        if (_options.ReplayRetentionBatchCount < 1)
+        {
+            throw new OrleansConfigurationException(
+                $"{nameof(GrainsStreamOptions)}.{nameof(GrainsStreamOptions.ReplayRetentionBatchCount)} on stream provider {_name} is invalid. {nameof(GrainsStreamOptions.ReplayRetentionBatchCount)} must be greater than 0");
+        }
+
         var duplicates = _options.NamespaceQueue
             .GroupBy(x => x.Namespace)
             .Where(x => x.Count() > 1)

@@ -62,6 +62,24 @@ public class GrainsStreamOptionsValidatorTests
     }
 
     [Fact]
+    public void ValidateConfiguration_Throws_WhenReplayRetentionBatchCountIsLessThanOne()
+    {
+        var options = new GrainsStreamOptions
+        {
+            MaxStreamNamespaceQueueCount = 1
+        };
+        var property = typeof(GrainsStreamOptions).GetProperty("ReplayRetentionBatchCount");
+
+        Assert.NotNull(property);
+
+        property!.SetValue(options, 0);
+
+        var sut = new GrainsStreamOptionsValidator(options, "provider");
+
+        Assert.Throws<OrleansConfigurationException>(sut.ValidateConfiguration);
+    }
+
+    [Fact]
     public void ValidateConfiguration_DoesNotThrow_ForValidOptions()
     {
         var options = new GrainsStreamOptions
