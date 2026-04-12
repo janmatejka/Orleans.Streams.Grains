@@ -46,30 +46,39 @@ public class QueueGrain(
 
     public Task DeleteQueueMessageAsync(GrainsQueueBatchContainer message)
     {
-        var pending = persistentState.State.PendingMessages.Dequeue();
-        while (!pending.SequenceToken.Equals(message.SequenceToken))
+        var target = NormalizeSequenceToken(message.SequenceToken);
+        var mutated = false;
+
+        while (persistentState.State.PendingMessages.Count > 0)
         {
-            switch (options.Value.DeadLetterStrategy)
+            var pending = persistentState.State.PendingMessages.Peek();
+
+            if (pending.SequenceToken.Newer(target))
             {
-                case DeadLetterStrategyType.Requeue:
-                    persistentState.State.Messages.Enqueue(message);
-                    break;
-                case DeadLetterStrategyType.DeadLetterQueue:
-                    persistentState.State.DroppedMessages.Enqueue(message);
-                    break;
-                case DeadLetterStrategyType.Log:
-                default:
-                    logger.LogWarning(
-                        new QueueMessageDroppedException(message.ToString()),
-                        "Message with token {Token} was not found in the pending messages queue.",
-                        message.SequenceToken);
-                    break;
+                if (mutated)
+                {
+                    return persistentState.WriteStateAsync();
+                }
+
+                return Task.CompletedTask;
             }
 
             pending = persistentState.State.PendingMessages.Dequeue();
+
+            if (pending.SequenceToken.Equals(target))
+            {
+                persistentState.State.ReplayMessages.Enqueue(pending);
+                TrimReplayMessages();
+                return persistentState.WriteStateAsync();
+            }
+
+            HandleGap(pending);
+            mutated = true;
         }
 
-        return Task.CompletedTask;
+        return mutated
+            ? persistentState.WriteStateAsync()
+            : Task.CompletedTask;
     }
 
     public async Task ShutdownAsync()
@@ -92,5 +101,43 @@ public class QueueGrain(
             persistentState.State.DroppedMessages.Count);
 
         return Task.FromResult(status);
+    }
+
+    private void HandleGap(GrainsQueueBatchContainer pending)
+    {
+        switch (options.Value.DeadLetterStrategy)
+        {
+            case DeadLetterStrategyType.Requeue:
+                persistentState.State.Messages.Enqueue(pending);
+                break;
+            case DeadLetterStrategyType.DeadLetterQueue:
+                persistentState.State.DroppedMessages.Enqueue(pending);
+                break;
+            case DeadLetterStrategyType.Log:
+            default:
+                logger.LogWarning(
+                    new QueueMessageDroppedException(pending.ToString()),
+                    "Message with token {Token} was not found in the pending messages queue.",
+                    pending.SequenceToken);
+                break;
+        }
+    }
+
+    private void TrimReplayMessages()
+    {
+        while (persistentState.State.ReplayMessages.Count > options.Value.ReplayRetentionBatchCount)
+        {
+            persistentState.State.ReplayMessages.Dequeue();
+        }
+    }
+
+    private static StreamSequenceToken NormalizeSequenceToken(StreamSequenceToken sequenceToken)
+    {
+        if (sequenceToken is EventSequenceTokenV2 eventSequenceToken && eventSequenceToken.EventIndex > 0)
+        {
+            return new EventSequenceTokenV2(eventSequenceToken.SequenceNumber);
+        }
+
+        return sequenceToken;
     }
 }

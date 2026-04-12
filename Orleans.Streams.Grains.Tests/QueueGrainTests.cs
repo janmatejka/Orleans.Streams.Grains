@@ -92,6 +92,101 @@ public class QueueGrainTests
     }
 
     [Fact]
+    public async Task DeleteQueueMessageAsync_DropsGapAndAppendsMatchedMessageToReplayMessages()
+    {
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var first = TestHelpers.NewBatch(1, "orders", "a");
+        var second = TestHelpers.NewBatch(2, "orders", "b");
+        var state = new QueueGrainState();
+        state.PendingMessages.Enqueue(first);
+        state.PendingMessages.Enqueue(second);
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions { DeadLetterStrategy = DeadLetterStrategyType.Log });
+        var sut = new QueueGrain(persistent, logger, options);
+
+        await sut.DeleteQueueMessageAsync(second);
+
+        Assert.Empty(state.Messages);
+        Assert.Empty(state.DroppedMessages);
+        Assert.Single(state.ReplayMessages);
+        Assert.Same(second, state.ReplayMessages.Peek());
+        Assert.Empty(state.PendingMessages);
+        await persistent.Received(1).WriteStateAsync();
+    }
+
+    [Fact]
+    public async Task DeleteQueueMessageAsync_NormalizesEventIndexBeforeMatching()
+    {
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var pending = TestHelpers.NewBatch(1, "orders", "a");
+        var state = new QueueGrainState();
+        state.PendingMessages.Enqueue(pending);
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions { DeadLetterStrategy = DeadLetterStrategyType.Log });
+        var sut = new QueueGrain(persistent, logger, options);
+        var targetToken = new EventSequenceTokenV2(1).CreateSequenceTokenForEvent(1);
+        var target = new GrainsQueueBatchContainer(
+            TestHelpers.NewStreamId("orders"),
+            ["b"],
+            new Dictionary<string, object>(),
+            targetToken);
+
+        await sut.DeleteQueueMessageAsync(target);
+
+        Assert.Single(state.ReplayMessages);
+        Assert.Same(pending, state.ReplayMessages.Peek());
+        Assert.Empty(state.PendingMessages);
+        await persistent.Received(1).WriteStateAsync();
+    }
+
+    [Fact]
+    public async Task DeleteQueueMessageAsync_TrimsReplayMessagesToRetentionCount()
+    {
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var existingReplay = TestHelpers.NewBatch(1, "orders", "a");
+        var pending = TestHelpers.NewBatch(2, "orders", "b");
+        var state = new QueueGrainState();
+        state.ReplayMessages.Enqueue(existingReplay);
+        state.PendingMessages.Enqueue(pending);
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions
+        {
+            DeadLetterStrategy = DeadLetterStrategyType.Log,
+            ReplayRetentionBatchCount = 1
+        });
+        var sut = new QueueGrain(persistent, logger, options);
+
+        await sut.DeleteQueueMessageAsync(pending);
+
+        Assert.Single(state.ReplayMessages);
+        Assert.Same(pending, state.ReplayMessages.Peek());
+        await persistent.Received(1).WriteStateAsync();
+    }
+
+    [Fact]
+    public async Task DeleteQueueMessageAsync_IsIdempotent_ForRepeatedDelete()
+    {
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var pending = TestHelpers.NewBatch(1, "orders", "a");
+        var state = new QueueGrainState();
+        state.PendingMessages.Enqueue(pending);
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions { DeadLetterStrategy = DeadLetterStrategyType.Log });
+        var sut = new QueueGrain(persistent, logger, options);
+
+        await sut.DeleteQueueMessageAsync(pending);
+        await sut.DeleteQueueMessageAsync(pending);
+
+        Assert.Single(state.ReplayMessages);
+        Assert.Same(pending, state.ReplayMessages.Peek());
+        await persistent.Received(1).WriteStateAsync();
+    }
+
+    [Fact]
     public async Task ShutdownAsync_WritesPersistentState()
     {
         var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
