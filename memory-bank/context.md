@@ -17,3 +17,4 @@
 - [x] Krok 4: prepisan `QueueGrain.DeleteQueueMessageAsync` na prefix-finalizer s replay trimem a idempotenci.
 - [x] Krok 5: pridan `GrainsRewindableQueueAdapterCache` a `GrainsRewindableQueueCache` s retention windowem.
 - [x] Krok 6: doplnen warmup replay buffer do `GrainsQueueAdapterReceiver.Initialize` a live duplicate filtering.
+- [x] Krok 7: prepnuto `GrainsQueueAdapter.IsRewindable` na rewindable path.
