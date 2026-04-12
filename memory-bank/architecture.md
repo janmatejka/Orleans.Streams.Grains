@@ -47,5 +47,24 @@ sequenceDiagram
 - Konfigurace provideru: [GrainsStreamOptions](../Orleans.Streams.Grains/GrainsStreamOptions.cs), [GrainsStreamOptionsValidator](../Orleans.Streams.Grains/GrainsStreamOptionsValidator.cs), [GrainsStreamQueueMapper](../Orleans.Streams.Grains/GrainsStreamQueueMapper.cs)
 - Hosting integrace: [Hosting/](../Orleans.Streams.Grains/Hosting/)
 
+## Testovaci architektura (implementovano)
+- Test helpery a data buildery: [TestHelpers](../Orleans.Streams.Grains.Tests/TestHelpers.cs)
+- API/behavior testy:
+  - [GrainsStreamOptionsValidatorTests](../Orleans.Streams.Grains.Tests/GrainsStreamOptionsValidatorTests.cs)
+  - [GrainsStreamQueueMapperTests](../Orleans.Streams.Grains.Tests/GrainsStreamQueueMapperTests.cs)
+  - [GrainsQueueBatchContainerTests](../Orleans.Streams.Grains.Tests/GrainsQueueBatchContainerTests.cs)
+  - [GrainsQueueServiceTests](../Orleans.Streams.Grains.Tests/GrainsQueueServiceTests.cs)
+  - [GrainsQueueAdapterTests](../Orleans.Streams.Grains.Tests/GrainsQueueAdapterTests.cs)
+  - [GrainsQueueAdapterReceiverTests](../Orleans.Streams.Grains.Tests/GrainsQueueAdapterReceiverTests.cs)
+  - [QueueGrainTests](../Orleans.Streams.Grains.Tests/QueueGrainTests.cs)
+  - [HostingApiTests](../Orleans.Streams.Grains.Tests/HostingApiTests.cs)
+  - [PublicApiModelTests](../Orleans.Streams.Grains.Tests/PublicApiModelTests.cs)
+  - [SmokeTests](../Orleans.Streams.Grains.Tests/SmokeTests.cs)
+
+## Poznamka k implementaci hostingu
+- V konfiguratorech hostingu byly opraveny null guardy, aby validace argumentu probehla pred volanim bazoveho konstruktoru:
+  - [SiloGrainsStreamConfigurator](../Orleans.Streams.Grains/Hosting/SiloGrainsStreamConfigurator.cs)
+  - [ClusterClientGrainsStreamConfigurator](../Orleans.Streams.Grains/Hosting/ClusterClientGrainsStreamConfigurator.cs)
+
 ## Monorepo kontext
 Git root je tento repozitar. Nejsou zjišteny dalsi interni projekty mimo dvojici produkcni knihovna + test projekt.

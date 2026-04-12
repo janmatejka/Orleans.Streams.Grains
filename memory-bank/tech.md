@@ -34,6 +34,14 @@
 - `dotnet build Orleans.Streams.Grains.slnx -c Release`
 - `dotnet test Orleans.Streams.Grains.slnx -c Release`
 
+## Stav verifikace (po implementaci testu)
+- Test project obsahuje aktivni test sadu s pokrytim API knihovny.
+- Posledni overeni pres VS-MCP:
+  - `ExecuteCommand(build)`: uspech, 0 chyb, 0 warningu
+  - `ExecuteAsyncTest(Orleans.Streams.Grains.Tests)`: 48/48 passed
+- Dulezita oprava v produkcnim kodu:
+  - `ThrowIfNull` helper v hosting konfiguratorech pro korektni `ArgumentNullException` pri neplatnych vstupech.
+
 ## CI/CD
 - Workflow: [publish.yml](../.github/workflows/publish.yml)
 - Trigger: push na `main`
