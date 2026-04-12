@@ -16,7 +16,7 @@ public class GrainsQueueAdapterTests
         var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, "provider");
 
         Assert.Equal("provider", sut.Name);
-        Assert.False(sut.IsRewindable);
+        Assert.True(sut.IsRewindable);
         Assert.Equal(StreamProviderDirection.ReadWrite, sut.Direction);
     }
 
