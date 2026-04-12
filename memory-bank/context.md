@@ -21,3 +21,4 @@
 - [x] Krok 8: doplnen `ReplayMessagesCount` do `QueueStatus`, naplnen z `QueueGrain.GetStatusAsync` a dopsany test snapshotu/stavu.
 - [x] Krok 9: doplneny integrační testy cluster-backed replay window a statusu pres `GrainsQueueService`.
 - [x] Krok 10: probehnut build + test gate, 65/65 zelene.
+- [x] Krok 11: doplneny integrační testy pro concurrent writers/readers a deaktivaci/reaktivaci grainu; `dotnet test` potvrzuje 69/69 zelene.

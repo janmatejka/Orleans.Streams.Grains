@@ -74,7 +74,7 @@ public sealed class GrainsStreamIntegrationTests(ClusterFixture fixture)
     [Theory]
     [InlineData(1, 1)]
     [InlineData(2, 2)]
-    [InlineData(4, 3)]
+    [InlineData(40, 30)]
     public async Task QueueService_ProcessesConcurrentWritersAndReaders(int writerCount, int readerCount)
     {
         const int messagesPerWriter = 4;
