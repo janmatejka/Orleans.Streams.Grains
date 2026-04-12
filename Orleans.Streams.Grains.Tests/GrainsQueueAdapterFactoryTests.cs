@@ -69,7 +69,7 @@ public class GrainsQueueAdapterFactoryTests
 
         Assert.NotNull(sut.GetStreamQueueMapper());
         Assert.NotNull(sut.GetGrainsQueueService());
-        Assert.NotNull(sut.GetQueueAdapterCache());
+        Assert.Equal("GrainsRewindableQueueAdapterCache", sut.GetQueueAdapterCache().GetType().Name);
     }
 
     [Fact]

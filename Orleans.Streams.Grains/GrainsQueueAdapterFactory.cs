@@ -9,7 +9,7 @@ public class GrainsQueueAdapterFactory : IQueueAdapterFactory
 {
     private readonly string _providerName;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly SimpleQueueAdapterCache _adapterCache;
+    private readonly IQueueAdapterCache _adapterCache;
     private readonly IStreamQueueMapper _streamQueueMapper;
     private readonly GrainsQueueService _grainsQueueService;
 
@@ -26,7 +26,10 @@ public class GrainsQueueAdapterFactory : IQueueAdapterFactory
     {
         _providerName = name;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        _adapterCache = new SimpleQueueAdapterCache(cacheOptions, _providerName, _loggerFactory);
+        _adapterCache = new GrainsRewindableQueueAdapterCache(
+            _providerName,
+            options.ReplayRetentionBatchCount,
+            _loggerFactory);
         _streamQueueMapper = new GrainsStreamQueueMapper(options);
         _grainsQueueService = new GrainsQueueService(
             _providerName,
