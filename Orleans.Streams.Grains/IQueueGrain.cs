@@ -16,5 +16,6 @@ public interface IQueueGrain : IGrainWithStringKey
     Task DeleteQueueMessageAsync(GrainsQueueBatchContainer message);
 
     Task ShutdownAsync();
+    Task DeactivateAsync();
     Task<QueueStatus> GetStatusAsync();
 }

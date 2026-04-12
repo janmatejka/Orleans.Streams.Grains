@@ -92,6 +92,12 @@ public class QueueGrain(
         await persistentState.WriteStateAsync();
     }
 
+    public Task DeactivateAsync()
+    {
+        DeactivateOnIdle();
+        return Task.CompletedTask;
+    }
+
     public override async Task OnDeactivateAsync(DeactivationReason reason, CancellationToken cancellationToken)
     {
         await persistentState.WriteStateAsync(cancellationToken);

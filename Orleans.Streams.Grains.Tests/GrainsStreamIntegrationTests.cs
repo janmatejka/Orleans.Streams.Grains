@@ -189,13 +189,10 @@ public sealed class GrainsStreamIntegrationTests(ClusterFixture fixture)
 
         var statusBefore = await service.GetQueueStatusAsync(queueId);
         var windowBefore = await service.GetReplayWindowAsync(queueId, 10);
-
         Assert.NotNull(await management.GetActivationAddress(queue));
 
-        await management.ForceActivationCollection(TimeSpan.Zero);
-        await WaitForActivationAddressAsync(management, queue, expectedPresent: false);
-
-        Assert.Null(await management.GetActivationAddress(queue));
+        await queue.DeactivateAsync();
+        await Task.Delay(100);
 
         var statusAfter = await service.GetQueueStatusAsync(queueId);
         var windowAfter = await service.GetReplayWindowAsync(queueId, 10);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Orleans.Configuration;
 using Orleans.Providers.Streams.Common;
+using System.Reflection;
 
 namespace Orleans.Streams.Grains.Tests;
 
@@ -89,5 +90,26 @@ public class GrainsQueueAdapterFactoryTests
         var factory = GrainsQueueAdapterFactory.Create(provider, "provider");
 
         Assert.NotNull(factory);
+    }
+
+    [Fact]
+    public void Ctor_AlignsSimpleCacheSizeToReplayRetentionCount()
+    {
+        var clusterClient = Substitute.For<IClusterClient>();
+        var loggerFactory = LoggerFactory.Create(_ => { });
+        var options = new GrainsStreamOptions
+        {
+            MaxStreamNamespaceQueueCount = 1,
+            ReplayRetentionBatchCount = 128
+        };
+        var cacheOptions = new SimpleQueueCacheOptions { CacheSize = 32 };
+        var sut = new GrainsQueueAdapterFactory("provider", options, cacheOptions, clusterClient, loggerFactory);
+
+        var adapterCache = Assert.IsType<SimpleQueueAdapterCache>(sut.GetQueueAdapterCache());
+        var cacheSizeField = typeof(SimpleQueueAdapterCache)
+            .GetField("cacheSize", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(cacheSizeField);
+        Assert.Equal(128, (int)cacheSizeField!.GetValue(adapterCache)!);
     }
 }
