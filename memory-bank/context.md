@@ -12,3 +12,4 @@
 ## Progress
 
 - [x] Krok 1: doplnen `ReplayRetentionBatchCount` do `GrainsStreamOptions` a validaci v `GrainsStreamOptionsValidator`.
+- [x] Krok 2: pridan `ReplayMessages` buffer do `QueueGrainState`.
