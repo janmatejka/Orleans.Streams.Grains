@@ -4,12 +4,17 @@ namespace Orleans.Streams.Grains;
 
 public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
 {
+    private const int MaxNumberOfMessagesToPeek = 32;
+
     private readonly QueueId _queueId;
     private readonly IGrainsQueueService _grainsQueueService;
     private Task? _outstandingTask;
     private readonly List<PendingDelivery> _pending = [];
+    private readonly Queue<GrainsQueueBatchContainer> _warmupBuffer = new();
+    private StreamSequenceToken? _warmupCutoffToken;
     private readonly ILogger<GrainsQueueAdapterReceiver> _logger;
     private bool _shutdown;
+    private bool _warmupInitialized;
 
     public GrainsQueueAdapterReceiver(QueueId queueId,
         IGrainsQueueService grainsQueueService,
@@ -20,29 +25,55 @@ public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
         _logger = loggerFactory.CreateLogger<GrainsQueueAdapterReceiver>();
     }
 
-    public Task Initialize(TimeSpan timeout)
+    public async Task Initialize(TimeSpan timeout)
     {
-        return Task.CompletedTask;
+        if (_warmupInitialized)
+        {
+            return;
+        }
+
+        try
+        {
+            var warmupTask = _grainsQueueService.GetReplayWindowAsync(_queueId, MaxNumberOfMessagesToPeek);
+            _outstandingTask = warmupTask;
+            var replayWindow = await warmupTask;
+
+            _warmupBuffer.Clear();
+            foreach (var message in replayWindow.Messages)
+            {
+                _warmupBuffer.Enqueue(message);
+            }
+
+            _warmupCutoffToken = replayWindow.WarmupCutoffToken;
+            _warmupInitialized = true;
+        }
+        finally
+        {
+            _outstandingTask = null;
+        }
     }
 
     public async Task<IList<IBatchContainer>> GetQueueMessagesAsync(int maxCount)
     {
-        const int maxNumberOfMessagesToPeek = 32;
-
         try
         {
             if (_shutdown) return new List<IBatchContainer>();
 
             var count = maxCount < 0
-                ? maxNumberOfMessagesToPeek
-                : Math.Min(maxCount, maxNumberOfMessagesToPeek);
+                ? MaxNumberOfMessagesToPeek
+                : Math.Min(maxCount, MaxNumberOfMessagesToPeek);
+
+            if (_warmupBuffer.Count > 0)
+            {
+                return DrainWarmupBuffer(count);
+            }
 
             var task = _grainsQueueService.GetQueueMessagesAsync(_queueId, count);
             _outstandingTask = task;
             var messages = await task;
 
             var queueMessages = new List<IBatchContainer>();
-            foreach (var message in messages)
+            foreach (var message in FilterDuplicateLiveMessages(messages))
             {
                 _pending.Add(new PendingDelivery(message.SequenceToken, message));
                 queueMessages.Add(message);
@@ -136,4 +167,27 @@ public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
     }
 
     private record PendingDelivery(StreamSequenceToken Token, GrainsQueueBatchContainer Message);
+
+    private IList<IBatchContainer> DrainWarmupBuffer(int count)
+    {
+        var queueMessages = new List<IBatchContainer>();
+        while (_warmupBuffer.Count > 0 && queueMessages.Count < count)
+        {
+            var message = _warmupBuffer.Dequeue();
+            _pending.Add(new PendingDelivery(message.SequenceToken, message));
+            queueMessages.Add(message);
+        }
+
+        return queueMessages;
+    }
+
+    private IEnumerable<GrainsQueueBatchContainer> FilterDuplicateLiveMessages(IList<GrainsQueueBatchContainer> messages)
+    {
+        if (_warmupCutoffToken == null)
+        {
+            return messages;
+        }
+
+        return messages.Where(message => message.SequenceToken.Newer(_warmupCutoffToken));
+    }
 }

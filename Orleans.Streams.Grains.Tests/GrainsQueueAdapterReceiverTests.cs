@@ -21,6 +21,55 @@ public class GrainsQueueAdapterReceiverTests
     }
 
     [Fact]
+    public async Task Initialize_DrainsReplayWindowBeforeLiveMessages_AndDropsDuplicates()
+    {
+        var queueId = TestHelpers.NewQueueId("orders");
+        var service = Substitute.For<IGrainsQueueService>();
+        var loggerFactory = Substitute.For<ILoggerFactory>();
+        var replayFirst = TestHelpers.NewBatch(1, "orders", "a");
+        var replaySecond = TestHelpers.NewBatch(2, "orders", "b");
+        var liveDuplicate = TestHelpers.NewBatch(2, "orders", "dup");
+        var liveFresh = TestHelpers.NewBatch(3, "orders", "fresh");
+        service.GetReplayWindowAsync(queueId, 32).Returns(
+            new GrainsQueueReplayWindow
+            {
+                Messages = [replayFirst, replaySecond],
+                WarmupCutoffToken = replaySecond.SequenceToken
+            });
+        service.GetQueueMessagesAsync(queueId, 2).Returns(new List<GrainsQueueBatchContainer> { liveDuplicate, liveFresh });
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+
+        await sut.Initialize(TimeSpan.FromSeconds(5));
+
+        var replayBatch = await sut.GetQueueMessagesAsync(2);
+
+        Assert.Collection(
+            replayBatch,
+            batch => Assert.Same(replayFirst, batch),
+            batch => Assert.Same(replaySecond, batch));
+        await service.DidNotReceive().GetQueueMessagesAsync(queueId, 2);
+
+        var liveBatch = await sut.GetQueueMessagesAsync(2);
+
+        Assert.Single(liveBatch);
+        Assert.Same(liveFresh, liveBatch[0]);
+        await service.Received(1).GetQueueMessagesAsync(queueId, 2);
+    }
+
+    [Fact]
+    public async Task Initialize_Fails_WhenReplayWindowFetchFails()
+    {
+        var queueId = TestHelpers.NewQueueId("orders");
+        var service = Substitute.For<IGrainsQueueService>();
+        var loggerFactory = Substitute.For<ILoggerFactory>();
+        service.GetReplayWindowAsync(queueId, 32).Returns<Task<GrainsQueueReplayWindow>>(_ => throw new InvalidOperationException("boom"));
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.Initialize(TimeSpan.FromSeconds(5)));
+        await service.DidNotReceive().GetQueueMessagesAsync(Arg.Any<QueueId>(), Arg.Any<int>());
+    }
+
+    [Fact]
     public async Task MessagesDeliveredAsync_DeletesOnlyDeliveredFinalizedMessages()
     {
         var queueId = TestHelpers.NewQueueId("orders");
