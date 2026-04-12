@@ -16,12 +16,17 @@ public class PublicApiModelTests
     [Fact]
     public void QueueStatus_ToString_ContainsKeyFields()
     {
-        var status = new QueueStatus("etag", 10, 3, 1, 2);
+        var status = new QueueStatus("etag", 10, 3, 1, 2, 4);
+        var replayMessagesProperty = typeof(QueueStatus).GetProperty("ReplayMessagesCount");
+
+        Assert.NotNull(replayMessagesProperty);
+        Assert.Equal(4, status.ReplayMessagesCount);
 
         var text = status.ToString();
 
         Assert.Contains("ETag:etag", text);
         Assert.Contains("LastReadMessage:10", text);
+        Assert.Contains("ReplayMessagesCount:4", text);
     }
 
     [Fact]

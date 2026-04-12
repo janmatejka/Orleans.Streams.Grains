@@ -98,7 +98,8 @@ public class QueueGrain(
             persistentState.State.LastReadMessage,
             persistentState.State.Messages.Count,
             persistentState.State.PendingMessages.Count,
-            persistentState.State.DroppedMessages.Count);
+            persistentState.State.DroppedMessages.Count,
+            persistentState.State.ReplayMessages.Count);
 
         return Task.FromResult(status);
     }

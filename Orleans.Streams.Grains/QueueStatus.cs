@@ -8,13 +8,15 @@ public class QueueStatus
         long lastReadMessage,
         int messageCount,
         int pendingMessagesCount,
-        long droppedMessagesCount)
+        long droppedMessagesCount,
+        int replayMessagesCount = 0)
     {
         ETag = eTag;
         LastReadMessage = lastReadMessage;
         MessageCount = messageCount;
         PendingMessagesCount = pendingMessagesCount;
         DroppedMessagesCount = droppedMessagesCount;
+        ReplayMessagesCount = replayMessagesCount;
     }
 
     [Id(0)]
@@ -32,9 +34,12 @@ public class QueueStatus
     [Id(4)]
     public long DroppedMessagesCount { get; set; }
 
+    [Id(5)]
+    public int ReplayMessagesCount { get; set; }
+
     public override string ToString()
     {
         return
-            $"ETag:{ETag},LastReadMessage:{LastReadMessage},MessageCount:{MessageCount},PendingMessagesCount:{PendingMessagesCount},DroppedMessagesCount:{DroppedMessagesCount}";
+            $"ETag:{ETag},LastReadMessage:{LastReadMessage},MessageCount:{MessageCount},PendingMessagesCount:{PendingMessagesCount},DroppedMessagesCount:{DroppedMessagesCount},ReplayMessagesCount:{ReplayMessagesCount}";
     }
 }

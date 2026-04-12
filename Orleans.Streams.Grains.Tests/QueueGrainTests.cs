@@ -208,6 +208,7 @@ public class QueueGrainTests
         state.Messages.Enqueue(TestHelpers.NewBatch(1));
         state.PendingMessages.Enqueue(TestHelpers.NewBatch(2));
         state.DroppedMessages.Enqueue(TestHelpers.NewBatch(3));
+        state.ReplayMessages.Enqueue(TestHelpers.NewBatch(4));
         persistent.State.Returns(state);
         persistent.Etag.Returns("etag-1");
         var logger = Substitute.For<ILogger<QueueGrain>>();
@@ -221,5 +222,6 @@ public class QueueGrainTests
         Assert.Equal(1, status.MessageCount);
         Assert.Equal(1, status.PendingMessagesCount);
         Assert.Equal(1, status.DroppedMessagesCount);
+        Assert.Equal(1, status.ReplayMessagesCount);
     }
 }
