@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 
 namespace Orleans.Streams.Grains.Tests;
@@ -209,6 +210,102 @@ public sealed class GrainsStreamIntegrationTests(ClusterFixture fixture)
             windowBefore.Messages.Select(message => message.SequenceToken.ToString()),
             windowAfter.Messages.Select(message => message.SequenceToken.ToString()));
         Assert.Equal(windowBefore.WarmupCutoffToken?.ToString(), windowAfter.WarmupCutoffToken?.ToString());
+    }
+
+    [Fact]
+    public async Task StreamProvider_PrimaryAndSecondaryResumeFromSavedCursor()
+    {
+        var streamProvider = fixture.Cluster.Client.GetStreamProvider(ClusterFixture.ProviderName);
+        var stream = streamProvider.GetStream<string>(Guid.NewGuid());
+        var payloads = Enumerable.Range(1, 10).Select(index => $"message-{index:00}").ToList();
+        StreamSubscriptionHandle<string>? primaryHandle = null;
+        StreamSubscriptionHandle<string>? secondaryHandle = null;
+
+        Assert.True(streamProvider.IsRewindable);
+
+        foreach (var payload in payloads)
+        {
+            await stream.OnNextAsync(payload);
+        }
+
+        try
+        {
+            var primaryReceived = new List<string>();
+            var primaryGate = new object();
+            var primaryFirstFive = new TaskCompletionSource<StreamSequenceToken>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var primaryAllTen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            primaryHandle = await stream.SubscribeAsync((item, token) =>
+            {
+                lock (primaryGate)
+                {
+                    primaryReceived.Add(item);
+                    if (primaryReceived.Count == 5)
+                    {
+                        primaryFirstFive.TrySetResult(token);
+                    }
+
+                    if (primaryReceived.Count == payloads.Count)
+                    {
+                        primaryAllTen.TrySetResult();
+                    }
+                }
+
+                return Task.CompletedTask;
+            }, new EventSequenceTokenV2(0));
+
+            var fifthMessageCursor = await primaryFirstFive.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await primaryAllTen.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+            Assert.Equal(payloads, primaryReceived);
+
+            var secondaryReceived = new List<string>();
+            var secondaryGate = new object();
+            var secondaryExpected = payloads.Skip(5).ToList();
+            var secondaryFive = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var secondaryStartCursor = CursorAfter(fifthMessageCursor);
+
+            secondaryHandle = await stream.SubscribeAsync((item, _) =>
+            {
+                lock (secondaryGate)
+                {
+                    secondaryReceived.Add(item);
+                    if (secondaryReceived.Count == secondaryExpected.Count)
+                    {
+                        secondaryFive.TrySetResult();
+                    }
+                }
+
+                return Task.CompletedTask;
+            }, secondaryStartCursor);
+
+            await secondaryFive.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await Task.Delay(100);
+
+            Assert.Equal(secondaryExpected, secondaryReceived);
+        }
+        finally
+        {
+            if (secondaryHandle is not null)
+            {
+                await secondaryHandle.UnsubscribeAsync();
+            }
+
+            if (primaryHandle is not null)
+            {
+                await primaryHandle.UnsubscribeAsync();
+            }
+        }
+    }
+
+    private static StreamSequenceToken CursorAfter(StreamSequenceToken cursor)
+    {
+        return cursor switch
+        {
+            EventSequenceTokenV2 eventSequenceToken => new EventSequenceTokenV2(eventSequenceToken.SequenceNumber + 1),
+            _ => cursor
+        };
     }
 
     private GrainsQueueService CreateService(string streamNamespace)
