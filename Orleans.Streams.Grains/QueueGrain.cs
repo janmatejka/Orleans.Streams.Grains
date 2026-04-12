@@ -32,6 +32,18 @@ public class QueueGrain(
         return Task.FromResult<IList<GrainsQueueBatchContainer>>(messages);
     }
 
+    public Task<GrainsQueueReplayWindow> GetReplayWindowAsync(int maxCount)
+    {
+        var messages = persistentState.State.ReplayMessages.Take(maxCount).ToList();
+        var warmupCutoffToken = messages.Count == 0 ? null : messages[^1].SequenceToken;
+
+        return Task.FromResult(new GrainsQueueReplayWindow
+        {
+            Messages = messages,
+            WarmupCutoffToken = warmupCutoffToken
+        });
+    }
+
     public Task DeleteQueueMessageAsync(GrainsQueueBatchContainer message)
     {
         var pending = persistentState.State.PendingMessages.Dequeue();

@@ -9,6 +9,9 @@ public interface IQueueGrain : IGrainWithStringKey
     [Alias("GetQueueMessagesAsync")]
     Task<IList<GrainsQueueBatchContainer>> GetQueueMessagesAsync(int maxCount);
 
+    [Alias("GetReplayWindowAsync")]
+    Task<GrainsQueueReplayWindow> GetReplayWindowAsync(int maxCount);
+
     [Alias("DeleteQueueMessageAsync")]
     Task DeleteQueueMessageAsync(GrainsQueueBatchContainer message);
 

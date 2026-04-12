@@ -15,6 +15,11 @@ public class GrainsQueueService(string providerName, IStreamQueueMapper streamQu
         return client.GetGrain<IQueueGrain>(queueId.ToString()).GetQueueMessagesAsync(maxCount);
     }
 
+    public Task<GrainsQueueReplayWindow> GetReplayWindowAsync(QueueId queueId, int maxCount)
+    {
+        return client.GetGrain<IQueueGrain>(queueId.ToString()).GetReplayWindowAsync(maxCount);
+    }
+
     public Task DeleteQueueMessageAsync(QueueId queueId, GrainsQueueBatchContainer message)
     {
         return client.GetGrain<IQueueGrain>(queueId.ToString()).DeleteQueueMessageAsync(message);

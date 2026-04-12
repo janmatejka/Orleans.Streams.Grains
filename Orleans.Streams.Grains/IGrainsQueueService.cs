@@ -6,6 +6,8 @@ public interface IGrainsQueueService
 
     Task<IList<GrainsQueueBatchContainer>> GetQueueMessagesAsync(QueueId queueId, int maxCount);
 
+    Task<GrainsQueueReplayWindow> GetReplayWindowAsync(QueueId queueId, int maxCount);
+
     Task DeleteQueueMessageAsync(QueueId queueId, GrainsQueueBatchContainer message);
 
     Task ShutdownAsync(QueueId queueId);
