@@ -5,20 +5,17 @@
 - **Proposal:** [Rewindable chovani pro GrainsQueueStorage provider](proposals/active/proposal_rewindable_stream_provider.md)
 - **Started:** 2026-04-12
 - **Status:** Implementation
-- **Execution Mode:** Strict
 - **Run Mode:** autonomous
 - **Jira:** (bez tiketu)
 
 ## Progress
 
-- [x] Krok 1: doplnen `ReplayRetentionBatchCount` do `GrainsStreamOptions` a validaci v `GrainsStreamOptionsValidator`.
-- [x] Krok 2: pridan `ReplayMessages` buffer do `QueueGrainState`.
-- [x] Krok 3: pridano `GetReplayWindowAsync` API a DTO `GrainsQueueReplayWindow`.
-- [x] Krok 4: prepisan `QueueGrain.DeleteQueueMessageAsync` na prefix-finalizer s replay trimem a idempotenci.
-- [x] Krok 5: pridan `GrainsRewindableQueueAdapterCache` a `GrainsRewindableQueueCache` s retention windowem.
-- [x] Krok 6: doplnen warmup replay buffer do `GrainsQueueAdapterReceiver.Initialize` a live duplicate filtering.
-- [x] Krok 7: prepnuto `GrainsQueueAdapter.IsRewindable` na rewindable path.
-- [x] Krok 8: doplnen `ReplayMessagesCount` do `QueueStatus`, naplnen z `QueueGrain.GetStatusAsync` a dopsany test snapshotu/stavu.
-- [x] Krok 9: doplneny integrační testy cluster-backed replay window a statusu pres `GrainsQueueService`.
-- [x] Krok 10: probehnut build + test gate, 65/65 zelene.
-- [x] Krok 11: doplneny integrační testy pro concurrent writers/readers a deaktivaci/reaktivaci grainu; `dotnet test` potvrzuje 69/69 zelene.
+- [x] Review aktualni vetve proti `fc6babb974d62b498d9be4f85f2964541fe50f0b` hotova.
+- [x] Overeni proti Orleans zdrojum (`c:\Users\matejka\source\repos\orleans`) hotove.
+- [x] Potvrzeny problemy: cache pressure/purge, cursor semantika, replay window poradi, warmup hard-cap 32, dual source-of-truth retention.
+- [x] Opravny checklist je zapsany v aktivnim proposalu (Strict mode, risk_score=3).
+- [x] Realizovany kroky 1-6 z aktivniho proposalu.
+- [x] Finalni gate probehla:
+  - `dotnet build Orleans.Streams.Grains.slnx -c Release` -> 0 chyb, 0 warningu
+  - `dotnet test Orleans.Streams.Grains.slnx -c Release -v minimal` -> 70/70 green
+- [ ] Rozhodnout o prechodu na `@mb_done` (uzavreni navrhu) nebo dalsi iteraci.

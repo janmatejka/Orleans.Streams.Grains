@@ -16,11 +16,54 @@
 ## Jira Kontext
 - (bez tiketu)
 
-## Soucasny stav v projektu
-- Adapter je dnes nerewindable: [GrainsQueueAdapter](../../../Orleans.Streams.Grains/GrainsQueueAdapter.cs)
-- Provider pouziva `SimpleQueueAdapterCache`: [GrainsQueueAdapterFactory](../../../Orleans.Streams.Grains/GrainsQueueAdapterFactory.cs)
-- Queue state nema replay buffer: [QueueGrainState](../../../Orleans.Streams.Grains/QueueGrainState.cs)
-- Per-operacni persistence dnes neni: [QueueGrain](../../../Orleans.Streams.Grains/QueueGrain.cs)
+## Soucasny stav po implementaci
+- Provider je prepnuty na rewindable path (`IsRewindable=true`) a pouziva Orleans cache:
+  - [GrainsQueueAdapter](../../../Orleans.Streams.Grains/GrainsQueueAdapter.cs)
+  - [GrainsQueueAdapterFactory](../../../Orleans.Streams.Grains/GrainsQueueAdapterFactory.cs)
+  - [SimpleQueueAdapterCache](../../../../orleans/src/Orleans.Streaming/Common/SimpleCache/SimpleQueueAdapterCache.cs)
+- Queue grain drzi replay buffer a expose replay API:
+  - [QueueGrain](../../../Orleans.Streams.Grains/QueueGrain.cs)
+  - [QueueGrainState](../../../Orleans.Streams.Grains/QueueGrainState.cs)
+  - [GrainsQueueReplayWindow](../../../Orleans.Streams.Grains/GrainsQueueReplayWindow.cs)
+
+## Zjistene problemy z review (2026-04-12)
+- **Kriticky:** `GrainsRewindableQueueCache.TryPurgeFromCache` je trvale `false` a `IsUnderPressure` vraci `true` pri naplneni retention, cteni se muze zastavit:
+  - [GrainsRewindableQueueCache](../../../Orleans.Streams.Grains/GrainsRewindableQueueCache.cs)
+  - [PersistentStreamPullingAgent](../../../../orleans/src/Orleans.Streaming/PersistentStreams/PersistentStreamPullingAgent.cs)
+- **Kriticky:** cursor semantika custom cache neni kompatibilni s Orleans (`MoveNext`/`Refresh`/enumerator pattern), hrozi ztrata nebo reorder doruceni:
+  - [GrainsRewindableQueueCache](../../../Orleans.Streams.Grains/GrainsRewindableQueueCache.cs)
+  - [SimpleQueueCacheCursor](../../../../orleans/src/Orleans.Streaming/Common/SimpleCache/SimpleQueueCacheCursor.cs)
+- **Vysoky dopad:** `GetReplayWindowAsync` vraci nejstarsi cast retenze (`Take(maxCount)`), receiver warmup je hard-cap 32 a retention ma 2 zdroje pravdy (`GrainsStreamOptions` vs `GrainsQueueOptions`):
+  - [QueueGrain](../../../Orleans.Streams.Grains/QueueGrain.cs)
+  - [GrainsQueueAdapterReceiver](../../../Orleans.Streams.Grains/GrainsQueueAdapterReceiver.cs)
+  - [GrainsStreamOptions](../../../Orleans.Streams.Grains/GrainsStreamOptions.cs)
+  - [GrainsQueueOptions](../../../Orleans.Streams.Grains/GrainsQueueOptions.cs)
+- **Stredni dopad:** integracni test deaktivace/reaktivace je flaky (timeout):
+  - [GrainsStreamIntegrationTests](../../../Orleans.Streams.Grains.Tests/GrainsStreamIntegrationTests.cs)
+
+## Varianty opravy
+- **A) Dopracovat custom cache do plne parity se `SimpleQueueCache`**
+  - Plus: zachova se aktualni vlastni vrstva.
+  - Minus: vysoke riziko regressi v cursor/purge/pressure semantice.
+- **B) Vratit runtime cache na Orleans `SimpleQueueAdapterCache`, rewind drzet v grain replay state (doporučeno)**
+  - Plus: jedna semantika kompatibilni s Orleans, mensi maintenance, mensi riziko.
+  - Minus: nutne premapovat retention konfiguraci a odstranit custom cache kod.
+- **C) Hybrid (custom cache + feature flag fallback na Simple)**
+  - Plus: postupny rollout.
+  - Minus: 2 cesty kodu, vyssi slozitost a proti cilu "jeden zdroj pravdy".
+
+## Doporucene rozhodnuti
+- Vybrana varianta: **B) Orleans `SimpleQueueAdapterCache` + grain replay retention jako jediny zdroj pravdy**.
+- Duvod: maximalni kompatibilita se semantikou Orleans a nejmensi produkcni riziko.
+
+## Doporuceni pri pochybnostech
+- Pokud bude implementace nebo testy nejednoznacne, prednostne overit semantiku v oficialnich Orleans zdrojacich:
+  - [Orleans zdrojaky](../../../../orleans/)
+- Referencni body:
+  - [SimpleQueueCache](../../../../orleans/src/Orleans.Streaming/Common/SimpleCache/SimpleQueueCache.cs)
+  - [SimpleQueueCacheCursor](../../../../orleans/src/Orleans.Streaming/Common/SimpleCache/SimpleQueueCacheCursor.cs)
+  - [PersistentStreamPullingAgent](../../../../orleans/src/Orleans.Streaming/PersistentStreams/PersistentStreamPullingAgent.cs)
+  - [QueueCacheMissException](../../../../orleans/src/Orleans.Streaming/QueueAdapters/QueueCacheMissException.cs)
 
 ## Rewind Contract
 ### Token granularita
@@ -57,7 +100,7 @@ sequenceDiagram
     participant A as GrainsQueueAdapter
     participant R as GrainsQueueAdapterReceiver
     participant Q as QueueGrain
-    participant QC as GrainsRewindableQueueCache
+    participant QC as SimpleQueueCache
 
     C->>RT: SubscribeAsync(token)
     RT->>A: IsRewindable
@@ -96,11 +139,8 @@ sequenceDiagram
 - [GrainsQueueAdapter](../../../Orleans.Streams.Grains/GrainsQueueAdapter.cs)
   - `IsRewindable` je `true`.
 - [GrainsQueueAdapterFactory](../../../Orleans.Streams.Grains/GrainsQueueAdapterFactory.cs)
-  - nahradit `SimpleQueueAdapterCache` za custom `GrainsRewindableQueueAdapterCache`.
-- Nova cache vrstva
-  - `GrainsRewindableQueueAdapterCache : IQueueAdapterCache`
-  - `GrainsRewindableQueueCache : IQueueCache`
-  - drzi poslednich N batchi (N = `ReplayRetentionBatchCount`) bez zavislosti na purge heuristikach.
+  - cilovy stav je Orleans `SimpleQueueAdapterCache`.
+  - `SimpleQueueCacheOptions.CacheSize` musi byt zarovnane s `ReplayRetentionBatchCount`, aby warmup+live cache drzely stejny retention budget.
 
 ### Warmup lifecycle hook (explicitne)
 - Warmup se provede v [GrainsQueueAdapterReceiver.Initialize](../../../Orleans.Streams.Grains/GrainsQueueAdapterReceiver.cs):
@@ -160,7 +200,7 @@ sequenceDiagram
 - Warning log pri token miss (`requested`, `low`, `high`, `queueId`, `providerName`).
 - Source metrik:
   - `GetReplayWindowAsync` -> `rewind_requests_total` a `replay_warmup_batches_loaded`
-  - `GrainsRewindableQueueCache.GetCacheCursor` -> `rewind_token_miss_total`
+  - cache miss path (`QueueCacheMissException`) -> `rewind_token_miss_total`
   - `GrainsQueueAdapterReceiver.Initialize` -> `replay_warmup_latency_ms`
   - `QueueGrain.DeleteQueueMessageAsync` -> `replay_finalize_latency_ms`
 - Jednotky:
@@ -182,41 +222,69 @@ sequenceDiagram
 - Rewind path je jedina implementace v provozu; zadny runtime fallback na legacy.
 
 ## Implementation Plan
-1. Rozsirit `GrainsStreamOptions` + validator (`ReplayRetentionBatchCount`).
-2. Rozsirit `QueueGrainState` o `ReplayMessages`.
-3. Rozsirit `IQueueGrain`/service o replay window API (`GetReplayWindowAsync`) a aditivni DTO.
-4. Implementovat prefix-finalizer v `QueueGrain`: gap handling podle strategie, target batch do `ReplayMessages`, idempotence, write-through.
-5. Implementovat custom rewindable queue cache (`IQueueAdapterCache`/`IQueueCache`) s retention limitem.
-6. Implementovat warmup v `GrainsQueueAdapterReceiver.Initialize` jako jednorazovy atomic snapshot + cutoff token, live az po vycerpani lokalniho bufferu.
-7. Napojit `GrainsQueueAdapter.IsRewindable` a receiver/cache na rewindable path bez feature flagu.
-8. Dopsat observability + `QueueStatus` rozsireni.
-9. Dopsat testy:
-   - unit: prefix finalization, gap handling, duplicate delete no-op, replay trim, token normalization.
-   - integration (TestCluster): subscribe/resume token, token miss, rewind miss, warmup boundary under concurrent enqueue, restart/deaktivace, full-path smoke test.
-10. Spustit build + test gate, vyhodnotit performance gate.
+- [x] **Krok 1: Sjednotit source-of-truth pro replay retention (`GrainsStreamOptions`)**
+  - Propagovat `ReplayRetentionBatchCount` do vsech mist, kde ho potrebuje grain i receiver.
+  - Odstranit drift mezi `GrainsStreamOptions` a `GrainsQueueOptions`.
+  - Commit: `@mb_git_commit` po zelenych unit testech konfigurace.
+- [x] **Krok 2: Opravit `QueueGrain.GetReplayWindowAsync` semantiku**
+  - Vracet **poslednich N batchi retention okna** (ne nejstarsi), zachovat deterministicke poradi pro warmup.
+  - `WarmupCutoffToken` musi byt nejvyssi token ve vracenem okne.
+  - Commit: `@mb_git_commit` po zelenych testech replay window.
+- [x] **Krok 3: Nahradit custom cache Orleans kompatibilni cestou**
+  - Vratit `GrainsQueueAdapterFactory` na `SimpleQueueAdapterCache` a odstranit custom rewindable cache tridu.
+  - Zarovnat `SimpleQueueCacheOptions.CacheSize` s `ReplayRetentionBatchCount`.
+  - Cilem je kompatibilni `MoveNext`/`Refresh`/purge/backpressure semantika bez vlastni reimplementace cache.
+  - Commit: `@mb_git_commit` po zelenych cache/adapter testech.
+- [x] **Krok 4: Opravit warmup lifecycle receiveru**
+  - Warmup call nesmi byt natvrdo 32; musi reflektovat retenzni cil.
+  - Zajistit replay-before-live a robustni deduplikaci proti `warmupCutoffToken`.
+  - Commit: `@mb_git_commit` po zelenych receiver testech.
+- [x] **Krok 5: Stabilizovat a rozsirit verifikaci**
+  - Opravit flaky test deaktivace/reaktivace.
+  - Dopsat scenar Oracle semantiky pro cursor handshake (`GetCacheCursor` + `MoveNext`) a test paralelnich writer/reader zatezi.
+  - Commit: `@mb_git_commit` po zelenych integracnich testech.
+- [x] **Krok 6: Finalni gate a evidence**
+  - Spustit `dotnet build` + `dotnet test` celeho solution.
+  - Zapsat vysledky do `memory-bank/context.md` a potvrdit pripravenost na `@mb_act`.
+  - Commit: `@mb_git_commit` s finalnim shrnutim.
+
+## Realizace (mb-act 2026-04-12)
+- `b6f4695` - odvozeni queue retention z `GrainsStreamOptions` v silo konfiguratoru.
+- `9eecadd` - `GetReplayWindowAsync` vraci newest retention window + unit testy.
+- `bb28392` - navrat na Orleans `SimpleQueueAdapterCache`, odstraneni custom cache kodu.
+- `484c4d2` - receiver warmup/live batch count ridi replay retention (zadny hard-cap 32).
+- `a5186d3` - stabilizace lifecycle integračního testu a verifikace cache-size alignment.
 
 ## Verification Scope
-- `GrainsQueueAdapter.IsRewindable` je true a provider vraci rewind path bez feature flagu.
-- Token `eventIndex > 0` je predikovatelne normalizovan na batch-level.
-- `DeleteQueueMessageAsync` finalizuje prefix `PendingMessages` podle tokenu a je idempotentni.
-- Warmup snapshot se nacte atomicky v jedne call, live polling startuje az po vycerpani lokalniho replay bufferu.
-- Concurrent enqueue behem warmupu neprodukuje duplicity ani mezery.
-- Gap batchy jdou pres existujici strategii, potvrzeny batch jde do `ReplayMessages`.
-- `GetReplayWindowAsync` vraci snapshot + `warmupCutoffToken` v jednom grain turnu.
-- Token v retention okne replayuje data; mimo okno vraci `QueueCacheMissException`.
-- `QueueStatus.ReplayMessagesCount` odpovida persisted replay bufferu.
-- Build + test + integracni testy prochazi.
+- **Orleans kompatibilita cache/cursor:**
+  - `GetCacheCursor(streamId, null)` zacina na newest tokenu.
+  - prvni `MoveNext()` vraci aktualni batch (enumerator pattern).
+  - `Refresh(token)` nerepozicuje aktivni cursor mimo Orleans kontrakt.
+  - `QueueCacheMissException` v pripade tokenu mimo retention (bez fallbacku na live tail).
+- **Replay window/warmup:**
+  - `GetReplayWindowAsync` vraci poslednich `ReplayRetentionBatchCount` potvrzenych batchi.
+  - `WarmupCutoffToken` je nejvyssi token replay snapshotu.
+  - warmup je replay-first, live duplicate batches (`<= cutoff`) se nedorucuji.
+- **Queue finalize flow:**
+  - `DeleteQueueMessageAsync` je idempotentni a zachovava gap strategii.
+  - `ReplayMessagesCount` v `QueueStatus` odpovida persisted stavu po finalize.
+- **Integrace a zatez:**
+  - concurrent writer/reader testy pro ruzne kombinace producer/consumer count.
+  - deaktivace/reaktivace grainu bez timeoutu a se zachovanim replay/status stavu.
+- **Gate:**
+  - `dotnet build Orleans.Streams.Grains.slnx -c Release`
+  - `dotnet test Orleans.Streams.Grains.slnx -c Release`
 
 ## Risk Assessment
 ### risk_score: 3
-- +1 API/contract zmena
-- +1 persistent state schema change
-- +1 multi-modulovy zasah
+- +1 API/contract korekce v runtime semantice (cursor/warmup/replay)
+- +1 data correction v replay chovani (okno + cutoff semantika)
+- +1 multi-modulovy zasah (adapter, receiver, grain, hosting, testy)
 
 ### execution_mode: Strict
 
 ## Success Criteria
-- Provider je rewindable a plni definovany batch-level rewind contract.
-- Replay retention je persistentni v rozsahu `ReplayRetentionBatchCount`.
-- Token miss je explicitne signalizovan a observovatelny.
-- Build + test + integracni gate jsou zelene.
+- Runtime je kompatibilni se semantikou Orleans stream cache/cursor.
+- Replay retention je ridena jednim zdrojem pravdy a warmup vraci spravne posledni okno.
+- Zadne zamrzani cteni kvuli trvale backpressure situaci.
+- Build + test + integracni gate jsou zelene, vcetne testu deactivate/reactivate.
