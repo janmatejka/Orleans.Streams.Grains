@@ -19,3 +19,5 @@
 - [x] Krok 6: doplnen warmup replay buffer do `GrainsQueueAdapterReceiver.Initialize` a live duplicate filtering.
 - [x] Krok 7: prepnuto `GrainsQueueAdapter.IsRewindable` na rewindable path.
 - [x] Krok 8: doplnen `ReplayMessagesCount` do `QueueStatus`, naplnen z `QueueGrain.GetStatusAsync` a dopsany test snapshotu/stavu.
+- [x] Krok 9: doplneny integrační testy cluster-backed replay window a statusu pres `GrainsQueueService`.
+- [x] Krok 10: probehnut build + test gate, 65/65 zelene.
