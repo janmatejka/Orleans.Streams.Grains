@@ -6,18 +6,20 @@ namespace Orleans.Streams.Grains.Tests;
 
 public class GrainsQueueAdapterReceiverTests
 {
+    private const int ReplayRetentionBatchCount = 64;
+
     [Fact]
     public async Task GetQueueMessagesAsync_UsesDefaultPeekCountForNegativeInput()
     {
         var queueId = TestHelpers.NewQueueId("orders");
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        service.GetQueueMessagesAsync(queueId, 32).Returns(new List<GrainsQueueBatchContainer>());
-        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+        service.GetQueueMessagesAsync(queueId, ReplayRetentionBatchCount).Returns(new List<GrainsQueueBatchContainer>());
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, ReplayRetentionBatchCount, loggerFactory);
 
         await sut.GetQueueMessagesAsync(-1);
 
-        await service.Received(1).GetQueueMessagesAsync(queueId, 32);
+        await service.Received(1).GetQueueMessagesAsync(queueId, ReplayRetentionBatchCount);
     }
 
     [Fact]
@@ -30,14 +32,14 @@ public class GrainsQueueAdapterReceiverTests
         var replaySecond = TestHelpers.NewBatch(2, "orders", "b");
         var liveDuplicate = TestHelpers.NewBatch(2, "orders", "dup");
         var liveFresh = TestHelpers.NewBatch(3, "orders", "fresh");
-        service.GetReplayWindowAsync(queueId, 32).Returns(
+        service.GetReplayWindowAsync(queueId, ReplayRetentionBatchCount).Returns(
             new GrainsQueueReplayWindow
             {
                 Messages = [replayFirst, replaySecond],
                 WarmupCutoffToken = replaySecond.SequenceToken
             });
         service.GetQueueMessagesAsync(queueId, 2).Returns(new List<GrainsQueueBatchContainer> { liveDuplicate, liveFresh });
-        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, ReplayRetentionBatchCount, loggerFactory);
 
         await sut.Initialize(TimeSpan.FromSeconds(5));
 
@@ -62,8 +64,8 @@ public class GrainsQueueAdapterReceiverTests
         var queueId = TestHelpers.NewQueueId("orders");
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        service.GetReplayWindowAsync(queueId, 32).Returns<Task<GrainsQueueReplayWindow>>(_ => throw new InvalidOperationException("boom"));
-        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+        service.GetReplayWindowAsync(queueId, ReplayRetentionBatchCount).Returns<Task<GrainsQueueReplayWindow>>(_ => throw new InvalidOperationException("boom"));
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, ReplayRetentionBatchCount, loggerFactory);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => sut.Initialize(TimeSpan.FromSeconds(5)));
         await service.DidNotReceive().GetQueueMessagesAsync(Arg.Any<QueueId>(), Arg.Any<int>());
@@ -75,7 +77,7 @@ public class GrainsQueueAdapterReceiverTests
         var queueId = TestHelpers.NewQueueId("orders");
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, ReplayRetentionBatchCount, loggerFactory);
         var first = TestHelpers.NewBatch(1, "orders", "a");
         var second = TestHelpers.NewBatch(2, "orders", "b");
         service.GetQueueMessagesAsync(queueId, 2).Returns(new List<GrainsQueueBatchContainer> { first, second });
@@ -93,7 +95,7 @@ public class GrainsQueueAdapterReceiverTests
         var queueId = TestHelpers.NewQueueId();
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, ReplayRetentionBatchCount, loggerFactory);
 
         await sut.MessagesDeliveredAsync(new List<IBatchContainer>());
 
@@ -106,7 +108,7 @@ public class GrainsQueueAdapterReceiverTests
         var queueId = TestHelpers.NewQueueId();
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        var sut = new GrainsQueueAdapterReceiver(queueId, service, loggerFactory);
+        var sut = new GrainsQueueAdapterReceiver(queueId, service, ReplayRetentionBatchCount, loggerFactory);
 
         await sut.Shutdown(TimeSpan.FromSeconds(5));
         var result = await sut.GetQueueMessagesAsync(10);

@@ -4,10 +4,10 @@ namespace Orleans.Streams.Grains;
 
 public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
 {
-    private const int MaxNumberOfMessagesToPeek = 32;
-
     private readonly QueueId _queueId;
     private readonly IGrainsQueueService _grainsQueueService;
+    private readonly int _warmupBatchCount;
+    private readonly int _defaultReadBatchCount;
     private Task? _outstandingTask;
     private readonly List<PendingDelivery> _pending = [];
     private readonly Queue<GrainsQueueBatchContainer> _warmupBuffer = new();
@@ -18,10 +18,13 @@ public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
 
     public GrainsQueueAdapterReceiver(QueueId queueId,
         IGrainsQueueService grainsQueueService,
+        int replayRetentionBatchCount,
         ILoggerFactory loggerFactory)
     {
         _queueId = queueId;
         _grainsQueueService = grainsQueueService;
+        _warmupBatchCount = Math.Max(1, replayRetentionBatchCount);
+        _defaultReadBatchCount = _warmupBatchCount;
         _logger = loggerFactory.CreateLogger<GrainsQueueAdapterReceiver>();
     }
 
@@ -34,7 +37,7 @@ public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
 
         try
         {
-            var warmupTask = _grainsQueueService.GetReplayWindowAsync(_queueId, MaxNumberOfMessagesToPeek);
+            var warmupTask = _grainsQueueService.GetReplayWindowAsync(_queueId, _warmupBatchCount);
             _outstandingTask = warmupTask;
             var replayWindow = await warmupTask;
 
@@ -59,9 +62,9 @@ public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
         {
             if (_shutdown) return new List<IBatchContainer>();
 
-            var count = maxCount < 0
-                ? MaxNumberOfMessagesToPeek
-                : Math.Min(maxCount, MaxNumberOfMessagesToPeek);
+            var count = maxCount <= 0
+                ? _defaultReadBatchCount
+                : maxCount;
 
             if (_warmupBuffer.Count > 0)
             {

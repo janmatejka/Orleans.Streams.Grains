@@ -13,7 +13,7 @@ public class GrainsQueueAdapterTests
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
 
-        var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, "provider");
+        var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, 100, "provider");
 
         Assert.Equal("provider", sut.Name);
         Assert.True(sut.IsRewindable);
@@ -26,7 +26,7 @@ public class GrainsQueueAdapterTests
         var mapper = Substitute.For<IStreamQueueMapper>();
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, "provider");
+        var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, 100, "provider");
         var streamId = TestHelpers.NewStreamId("orders");
         var queueId = TestHelpers.NewQueueId("orders");
         mapper.GetQueueForStream(streamId).Returns(queueId);
@@ -45,7 +45,7 @@ public class GrainsQueueAdapterTests
         var mapper = Substitute.For<IStreamQueueMapper>();
         var service = Substitute.For<IGrainsQueueService>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
-        var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, "provider");
+        var sut = new GrainsQueueAdapter(mapper, service, loggerFactory, 100, "provider");
 
         var receiver = sut.CreateReceiver(TestHelpers.NewQueueId());
 

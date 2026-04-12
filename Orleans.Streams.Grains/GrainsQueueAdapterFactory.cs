@@ -12,6 +12,7 @@ public class GrainsQueueAdapterFactory : IQueueAdapterFactory
     private readonly IQueueAdapterCache _adapterCache;
     private readonly IStreamQueueMapper _streamQueueMapper;
     private readonly GrainsQueueService _grainsQueueService;
+    private readonly int _replayRetentionBatchCount;
 
     /// <summary>
     /// Application level failure handler override.
@@ -26,9 +27,10 @@ public class GrainsQueueAdapterFactory : IQueueAdapterFactory
     {
         _providerName = name;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        _replayRetentionBatchCount = Math.Max(1, options.ReplayRetentionBatchCount);
         var effectiveCacheOptions = new SimpleQueueCacheOptions
         {
-            CacheSize = Math.Max(cacheOptions.CacheSize, options.ReplayRetentionBatchCount)
+            CacheSize = Math.Max(cacheOptions.CacheSize, _replayRetentionBatchCount)
         };
         _adapterCache = new SimpleQueueAdapterCache(effectiveCacheOptions, _providerName, _loggerFactory);
         _streamQueueMapper = new GrainsStreamQueueMapper(options);
@@ -53,6 +55,7 @@ public class GrainsQueueAdapterFactory : IQueueAdapterFactory
             _streamQueueMapper,
             _grainsQueueService,
             _loggerFactory,
+            _replayRetentionBatchCount,
             _providerName);
         return Task.FromResult<IQueueAdapter>(adapter);
     }
