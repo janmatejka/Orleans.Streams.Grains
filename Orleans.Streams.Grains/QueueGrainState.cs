@@ -15,4 +15,7 @@ public class QueueGrainState
 
     [Id(3)]
     public Queue<GrainsQueueBatchContainer> DroppedMessages { get; set; } = new();
+
+    [Id(4)]
+    public Queue<GrainsQueueBatchContainer> ReplayMessages { get; set; } = new();
 }
