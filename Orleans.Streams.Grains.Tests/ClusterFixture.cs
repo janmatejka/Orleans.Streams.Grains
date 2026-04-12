@@ -28,9 +28,6 @@ public sealed class GrainsStreamTestSiloConfigurator : ISiloConfigurator
     {
         siloBuilder.AddMemoryGrainStorage(GrainsStreamProviderConsts.QueueStorageName);
         siloBuilder.AddMemoryGrainStorage(ClusterFixture.ProviderName);
-        siloBuilder.ConfigureServices(services =>
-            services.Configure<GrainsQueueOptions>(options =>
-                options.ReplayRetentionBatchCount = ClusterFixture.ReplayRetentionBatchCount));
         siloBuilder.AddGrainsStreams(ClusterFixture.ProviderName, options =>
         {
             options.MaxStreamNamespaceQueueCount = 1;

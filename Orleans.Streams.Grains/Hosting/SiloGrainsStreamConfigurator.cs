@@ -22,6 +22,13 @@ public class SiloGrainsStreamConfigurator : SiloPersistentStreamConfigurator
                 .ConfigureNamedOptionForLogging<SimpleQueueCacheOptions>(name)
                 .AddTransient<IConfigurationValidator>(sp =>
                     new GrainsStreamOptionsValidator(sp.GetOptionsByName<GrainsStreamOptions>(name), name));
+
+            services
+                .AddOptions<GrainsQueueOptions>()
+                .Configure<IOptionsMonitor<GrainsStreamOptions>>((queueOptions, streamOptionsMonitor) =>
+                {
+                    queueOptions.ReplayRetentionBatchCount = streamOptionsMonitor.Get(name).ReplayRetentionBatchCount;
+                });
         });
     }
 
