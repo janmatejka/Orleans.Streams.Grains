@@ -10,12 +10,11 @@ namespace Orleans.Streams.Grains.Hosting;
 /// </summary>
 public class ClusterClientGrainsStreamConfigurator : ClusterClientPersistentStreamConfigurator
 {
-    public ClusterClientGrainsStreamConfigurator(string name, IClientBuilder clientBuilder) : base(name, clientBuilder,
+    public ClusterClientGrainsStreamConfigurator(string name, IClientBuilder clientBuilder) : base(
+        ThrowIfNull(name, nameof(name)),
+        ThrowIfNull(clientBuilder, nameof(clientBuilder)),
         GrainsQueueAdapterFactory.Create)
     {
-        ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(clientBuilder);
-
         clientBuilder.ConfigureServices(services =>
         {
             services
@@ -43,5 +42,11 @@ public class ClusterClientGrainsStreamConfigurator : ClusterClientPersistentStre
         this.Configure<SimpleQueueCacheOptions>(ob => ob.Configure(options => options.CacheSize = cacheSize));
 
         return this;
+    }
+
+    private static T ThrowIfNull<T>(T value, string paramName) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(value, paramName);
+        return value;
     }
 }
