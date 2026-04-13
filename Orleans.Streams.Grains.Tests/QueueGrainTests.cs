@@ -167,6 +167,61 @@ public class QueueGrainTests
     }
 
     [Fact]
+    public async Task DeleteQueueMessageAsync_PreservesOnlyTheMostRecentThousandReplayMessages()
+    {
+        const int replayRetentionBatchCount = 1000;
+        var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
+        var state = new QueueGrainState();
+        persistent.State.Returns(state);
+        var logger = Substitute.For<ILogger<QueueGrain>>();
+        var options = Options.Create(new GrainsQueueOptions
+        {
+            DeadLetterStrategy = DeadLetterStrategyType.Log,
+            ReplayRetentionBatchCount = replayRetentionBatchCount
+        });
+        var sut = new QueueGrain(persistent, logger, options);
+
+        for (var index = 0; index < replayRetentionBatchCount + 1; index++)
+        {
+            var message = TestHelpers.NewBatch(index + 1, "orders", $"message-{index + 1}");
+
+            await sut.QueueMessageBatchAsync(message);
+
+            var pending = await sut.GetQueueMessagesAsync(1);
+            await sut.DeleteQueueMessageAsync(pending.Single());
+
+            if (index == replayRetentionBatchCount - 2)
+            {
+                var windowBeforeFill = await sut.GetReplayWindowAsync(replayRetentionBatchCount);
+
+                Assert.Equal(replayRetentionBatchCount - 1, state.ReplayMessages.Count);
+                Assert.Equal(replayRetentionBatchCount - 1, windowBeforeFill.Messages.Count);
+                Assert.Equal(new EventSequenceTokenV2(0).ToString(), windowBeforeFill.Messages[0].SequenceToken.ToString());
+                Assert.Equal(new EventSequenceTokenV2(replayRetentionBatchCount - 2).ToString(), windowBeforeFill.Messages[^1].SequenceToken.ToString());
+            }
+
+            if (index == replayRetentionBatchCount - 1)
+            {
+                var windowAtCapacity = await sut.GetReplayWindowAsync(replayRetentionBatchCount);
+
+                Assert.Equal(replayRetentionBatchCount, state.ReplayMessages.Count);
+                Assert.Equal(replayRetentionBatchCount, windowAtCapacity.Messages.Count);
+                Assert.Equal(new EventSequenceTokenV2(0).ToString(), windowAtCapacity.Messages[0].SequenceToken.ToString());
+                Assert.Equal(new EventSequenceTokenV2(replayRetentionBatchCount - 1).ToString(), windowAtCapacity.Messages[^1].SequenceToken.ToString());
+            }
+        }
+
+        var windowAfterRotation = await sut.GetReplayWindowAsync(replayRetentionBatchCount);
+
+        Assert.Equal(replayRetentionBatchCount, state.ReplayMessages.Count);
+        Assert.Equal(replayRetentionBatchCount, windowAfterRotation.Messages.Count);
+        Assert.Equal(new EventSequenceTokenV2(1).ToString(), windowAfterRotation.Messages[0].SequenceToken.ToString());
+        Assert.Equal(new EventSequenceTokenV2(replayRetentionBatchCount).ToString(), windowAfterRotation.Messages[^1].SequenceToken.ToString());
+        Assert.DoesNotContain(windowAfterRotation.Messages, message => message.SequenceToken.Equals(new EventSequenceTokenV2(0)));
+        await persistent.Received(replayRetentionBatchCount + 1).WriteStateAsync();
+    }
+
+    [Fact]
     public async Task DeleteQueueMessageAsync_IsIdempotent_ForRepeatedDelete()
     {
         var persistent = Substitute.For<IPersistentState<QueueGrainState>>();
